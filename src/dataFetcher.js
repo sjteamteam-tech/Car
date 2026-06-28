@@ -1,0 +1,209 @@
+import Papa from 'papaparse';
+import { vehicles, drivers } from './mockData'; // keep vehicles info for colors
+
+const SHEET_URLS = {
+  inspections: 'https://docs.google.com/spreadsheets/d/1vSDhMOr7A2iKfzvP9Cv_nSKJkJk0kYCLHLPGdCzqzs0/export?format=csv&gid=1907779796',
+  speeding: 'https://docs.google.com/spreadsheets/d/1fPL_eTSRUBIlgrwF0MwjEOeEN6YVfHi9eoCoSaNsy3g/export?format=csv&gid=239312134',
+  usage_9647: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=0',
+  usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1535938534',
+  usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=366393931',
+  risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0'
+};
+
+const parseCSV = (url) => {
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => resolve(results.data),
+      error: (error) => reject(error)
+    });
+  });
+};
+
+// Helper to parse dates like "1/6/2026" or "1/6/69" (Thai year) or "01/06/2026 14:52:22" or "2026-06-28"
+const parseDate = (dateStr) => {
+  if (!dateStr) return null;
+  let dStr = dateStr.split(' ')[0]; // get just the date part
+  
+  if (dStr.includes('-')) {
+    const parts = dStr.split('-');
+    if (parts.length === 3) {
+      return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10) };
+    }
+  }
+
+  let parts = dStr.split('/');
+  if (parts.length === 3) {
+    let day = parseInt(parts[0], 10);
+    let month = parseInt(parts[1], 10);
+    let year = parseInt(parts[2], 10);
+    
+    // Handle Thai short year (e.g. 69 -> 2569 -> 2026)
+    if (year < 100) {
+      year = (year + 2500) - 543;
+    } else if (year > 2500) {
+      // Full Thai year
+      year = year - 543;
+    }
+    
+    return { year, month, day };
+  }
+  return null;
+};
+
+// Normalize vehicle plate from string
+const normalizePlate = (str) => {
+  if (!str) return 'ไม่ทราบ';
+  if (str.includes('9647')) return 'กฉ9647';
+  if (str.includes('3500')) return 'กฉ3500';
+  if (str.includes('9919')) return 'ช9919';
+  return str;
+};
+
+export const fetchDashboardData = async () => {
+  try {
+    const [inspectionsRaw, speedingRaw, usage9647Raw, usage3500Raw, usage9919Raw, risksRaw] = await Promise.all([
+      parseCSV(SHEET_URLS.inspections),
+      parseCSV(SHEET_URLS.speeding),
+      parseCSV(SHEET_URLS.usage_9647),
+      parseCSV(SHEET_URLS.usage_3500),
+      parseCSV(SHEET_URLS.usage_9919),
+      parseCSV(SHEET_URLS.risks)
+    ]);
+
+    const allTrips = [];
+    const allInspections = [];
+    const allRisks = [];
+
+    // Process Inspections
+    // Headers: ประทับเวลา, ชื่อผู้ตรวจสอบความพร้อมใช้  >>, ตรวจสอบรถReferคัน >>
+    inspectionsRaw.forEach(row => {
+      const ts = row['ประทับเวลา'];
+      const dateInfo = parseDate(ts);
+      if (dateInfo) {
+        const plateRaw = row['ตรวจสอบรถReferคัน >>'];
+        const plate = normalizePlate(plateRaw);
+        const time = ts.split(', ')[1] || '00:00:00';
+        const inspectorFullName = row['ชื่อผู้ตรวจสอบความพร้อมใช้  >>'] || 'ไม่ระบุ';
+        const inspectorName = inspectorFullName.replace('นาย', '').split(' ')[0];
+
+        allInspections.push({
+          date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
+          year: dateInfo.year,
+          month: dateInfo.month,
+          day: dateInfo.day,
+          vehiclePlate: plate,
+          vehicleId: vehicles.find(v => v.plate === plate)?.id || plate,
+          completed: true,
+          inspectorName: inspectorName,
+          time: time
+        });
+      }
+    });
+
+    // Process Speeding
+    // Headers: License Plate, Driver, Start Date, Max Speed
+    speedingRaw.forEach((row, idx) => {
+      const ts = row['Start Date'];
+      const dateInfo = parseDate(ts);
+      if (dateInfo) {
+        const plate = normalizePlate(row['License Plate']);
+        const speed = parseInt(row['Max Speed'], 10) || 0;
+        const driverName = row['Driver'] && row['Driver'].trim() !== '-' && row['Driver'].trim() !== '' ? row['Driver'] : 'ไม่ระบุชื่อ';
+        
+        // Count as speeding if Max Speed > 90
+        const isSpeeding = speed > 90;
+
+        // Even if the speeding sheet has all records, we mostly care about those over limit for the chart, 
+        // but let's store all of them or just the speeding ones. The requirement focuses on over 90.
+        // Actually, the app logic filters by `t.isSpeeding`.
+        allTrips.push({
+          id: `speed_${idx}`,
+          date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
+          year: dateInfo.year,
+          month: dateInfo.month,
+          day: dateInfo.day,
+          driverName: driverName,
+          vehiclePlate: plate,
+          maxSpeed: speed,
+          isSpeeding: isSpeeding,
+          source: 'speeding'
+        });
+      }
+    });
+
+    // Process Usage (Trips) to count total trips
+    // Headers: วันที่ออกเดินทาง, ER/IPD, สถานที่ไป, พนักงานขับรถ
+    const processUsage = (raw, plate) => {
+      raw.forEach((row, idx) => {
+        const ts = row['วันที่ออกเดินทาง'];
+        const dateInfo = parseDate(ts);
+        const erIpd = (row['ER/IPD'] || '').trim();
+        const dest = (row['สถานที่ไป'] || '').trim();
+        
+        // Skip refueling
+        if (erIpd === 'เติมน้ำมัน' || dest === 'เติมน้ำมัน' || (!erIpd && !dest)) return;
+        
+        if (dateInfo) {
+          const driverRaw = row['พนักงานขับรถ'] || 'ไม่ระบุ';
+          allTrips.push({
+            id: `usage_${plate}_${idx}`,
+            date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
+            year: dateInfo.year,
+            month: dateInfo.month,
+            day: dateInfo.day,
+            driverName: driverRaw,
+            vehiclePlate: plate,
+            isSpeeding: false, // We rely on the speeding sheet for speed limit violations
+            source: 'usage'
+          });
+        }
+      });
+    };
+
+    processUsage(usage9647Raw, 'กฉ9647');
+    processUsage(usage3500Raw, 'กฉ3500');
+    processUsage(usage9919Raw, 'ช9919');
+
+    // Process Risks
+    // Headers: วันที่เกิดเหตุ, เวลา, ทะเบียนรถ, พนักงานขับรถ, รายละเอียดเหตุการณ์, สถานที่เกิดเหตุ
+    risksRaw.forEach((row, idx) => {
+      const keys = Object.keys(row);
+      // Try exact match first
+      let ts = row['วันที่เกิดเหตุ'] || row['ประทับเวลา'];
+      // Fallback to substring match (handles BOM)
+      if (!ts) {
+        const dateKey = keys.find(k => k.includes('วันที่') || k.includes('เวลา'));
+        if (dateKey) ts = row[dateKey];
+      }
+      // Absolute fallback to first column
+      if (!ts && keys.length > 0) {
+        ts = row[keys[0]];
+      }
+
+      if (!ts) return;
+      const dateInfo = parseDate(ts);
+      if (dateInfo) {
+        allRisks.push({
+          id: `risk_${idx}`,
+          date: ts,
+          year: dateInfo.year,
+          month: dateInfo.month,
+          day: dateInfo.day,
+          vehiclePlate: normalizePlate(row['ทะเบียนรถ'] || row[keys.find(k => k.includes('ทะเบียน'))]),
+          driverName: row['พนักงานขับรถ'] || row[keys.find(k => k.includes('พนักงาน'))],
+          details: row['รายละเอียดเหตุการณ์'] || row[keys.find(k => k.includes('รายละเอียด'))],
+          location: row['สถานที่เกิดเหตุ'] || row[keys.find(k => k.includes('สถานที่'))]
+        });
+      }
+    });
+
+    // Return the aggregated real data
+    return { allTrips, allInspections, risks: allRisks }; 
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    throw error;
+  }
+};
