@@ -10,16 +10,24 @@ const SHEET_URLS = {
   risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0'
 };
 
-const parseCSV = (url) => {
-  return new Promise((resolve, reject) => {
-    Papa.parse(url, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => resolve(results.data),
-      error: (error) => reject(error)
+const parseCSV = async (url) => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const csvText = await response.text();
+    
+    return new Promise((resolve, reject) => {
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => resolve(results.data),
+        error: (error) => reject(error)
+      });
     });
-  });
+  } catch (error) {
+    console.error("Error fetching CSV from:", url, error);
+    throw error;
+  }
 };
 
 // Helper to parse dates like "1/6/2026" or "1/6/69" (Thai year) or "01/06/2026 14:52:22" or "2026-06-28"
