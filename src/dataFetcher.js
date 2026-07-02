@@ -118,17 +118,27 @@ export const fetchDashboardData = async () => {
     });
 
     // Process Speeding
-    // Headers: License Plate, Driver, Start Date, Max Speed
+    // Headers: No., Car Name, License Plate, Province, Driver, Start Date, Start Position, End Date, End Position, Limit Speed, Max Speed, Period
+    const parseDurationToMinutes = (periodStr) => {
+      if (!periodStr) return 0;
+      let minutes = 0;
+      let seconds = 0;
+      const minMatch = periodStr.match(/(\d+)\s*minutes?/);
+      const secMatch = periodStr.match(/(\d+)\s*seconds?/);
+      if (minMatch) minutes += parseInt(minMatch[1], 10);
+      if (secMatch) seconds += parseInt(secMatch[1], 10);
+      return minutes + (seconds / 60);
+    };
+
     speedingRaw.forEach((row, idx) => {
       const ts = row['Start Date'];
       const dateInfo = parseDate(ts);
       if (dateInfo) {
-        const plate = normalizePlate(row['License Plate']);
-        const speed = parseInt(row['Max Speed'], 10) || 0;
-        const driverName = row['Driver'] && row['Driver'].trim() !== '-' && row['Driver'].trim() !== '' ? row['Driver'] : 'ไม่ระบุชื่อ';
-        
+        const speed = parseFloat(row['Max Speed']) || 0;
         // Count as speeding if Max Speed > 90
         const isSpeeding = speed > 90;
+        const durationStr = row['Period'];
+        const durationMinutes = parseDurationToMinutes(durationStr);
 
         allTrips.push({
           id: `speed_${idx}`,
@@ -136,39 +146,49 @@ export const fetchDashboardData = async () => {
           year: dateInfo.year,
           month: dateInfo.month,
           day: dateInfo.day,
-          driverName: driverName,
-          vehiclePlate: plate,
+          vehiclePlate: normalizePlate(row['License Plate']),
+          source: 'speeding',
+          driverName: row['Driver'] || 'ไม่ระบุ',
           maxSpeed: speed,
           isSpeeding: isSpeeding,
-          source: 'speeding'
+          durationMinutes: durationMinutes,
+          durationStr: durationStr
         });
       }
     });
 
-    // Process Usage (Trips) to count total trips
-    // Headers: วันที่ออกเดินทาง, ER/IPD, สถานที่ไป, พนักงานขับรถ
-    const processUsage = (raw, plate) => {
-      raw.forEach((row, idx) => {
+    // Process Usage
+    const processUsage = (data, plate) => {
+      data.forEach((row, idx) => {
         const ts = row['วันที่ออกเดินทาง'];
         const dateInfo = parseDate(ts);
-        const erIpd = (row['ER/IPD'] || '').trim();
-        const dest = (row['สถานที่ไป'] || '').trim();
-        
-        // Skip refueling
-        if (erIpd === 'เติมน้ำมัน' || dest === 'เติมน้ำมัน' || (!erIpd && !dest)) return;
-        
         if (dateInfo) {
-          const driverRaw = row['พนักงานขับรถ'] || 'ไม่ระบุ';
+          const isRefuel = (row['สถานที่ไป'] && row['สถานที่ไป'].includes('เติมน้ำมัน')) || 
+                           (row['ER/IPD'] && row['ER/IPD'].includes('เติมน้ำมัน'));
+
+          const fuelCost = parseFloat(row['จำนวนเงิน']) || 0;
+          const fuelVolume = parseFloat(row['เติมน้ำมันกี่ลิตร']) || 0;
+          const distance = parseFloat(row['รวมระยะทาง']) || 0;
+          let shift = row['เป็นเวร'] || 'ไม่ระบุ';
+          if (shift.includes('เช้า')) shift = 'เช้า';
+          else if (shift.includes('บ่าย')) shift = 'บ่าย';
+          else if (shift.includes('ดึก')) shift = 'ดึก';
+          else shift = 'ไม่ระบุ';
+
           allTrips.push({
             id: `usage_${plate}_${idx}`,
             date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
             year: dateInfo.year,
             month: dateInfo.month,
             day: dateInfo.day,
-            driverName: driverRaw,
             vehiclePlate: plate,
-            isSpeeding: false, // We rely on the speeding sheet for speed limit violations
-            source: 'usage'
+            source: 'usage',
+            driverName: row['พนักงานขับรถ'] || row['ผู้ใช้รถ'] || 'ไม่ระบุ',
+            isRefuel: isRefuel,
+            fuelCost: fuelCost,
+            fuelVolume: fuelVolume,
+            distance: distance,
+            shift: shift
           });
         }
       });

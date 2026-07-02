@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { 
-  Activity, AlertTriangle, CheckCircle, Truck, Calendar as CalendarIcon, Users, ShieldAlert, CalendarDays, ClipboardCheck, Loader2
+  Activity, AlertTriangle, CheckCircle, Truck, Calendar as CalendarIcon, Users, ShieldAlert, CalendarDays, ClipboardCheck, Loader2, Gauge, Fuel
 } from 'lucide-react';
 import { vehicles, drivers } from './mockData'; 
 import { fetchDashboardData } from './dataFetcher';
@@ -120,8 +120,42 @@ const App = () => {
   const totalTrips = trips.filter(t => t.source === 'usage').length;
   const speedingTrips = trips.filter(t => t.isSpeeding);
   const totalSpeeding = speedingTrips.length;
-  const totalDriversCount = drivers.length;
   const totalRisks = risks.length;
+
+  const maxSpeedTrip = useMemo(() => {
+    return speedingTrips.length > 0 ? speedingTrips.reduce((prev, current) => (prev.maxSpeed > current.maxSpeed) ? prev : current) : null;
+  }, [speedingTrips]);
+
+  const fuelAndDistanceSummary = useMemo(() => {
+    return vehicles.map(v => {
+      const vTrips = trips.filter(t => t.vehiclePlate === v.plate && t.source === 'usage');
+      const totalDistance = vTrips.reduce((sum, t) => sum + (t.distance || 0), 0);
+      const totalFuelCost = vTrips.reduce((sum, t) => sum + (t.fuelCost || 0), 0);
+      const totalFuelVolume = vTrips.reduce((sum, t) => sum + (t.fuelVolume || 0), 0);
+      return {
+        ...v,
+        totalDistance,
+        totalFuelCost,
+        totalFuelVolume
+      };
+    });
+  }, [trips]);
+
+  const dailyShiftTrips = useMemo(() => {
+    if (selectedMonth === 0) return [];
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const data = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayTrips = trips.filter(t => !t.isRefuel && t.source === 'usage' && t.day === day);
+      data.push({
+        day: day.toString(),
+        'เช้า': dayTrips.filter(t => t.shift === 'เช้า').length,
+        'บ่าย': dayTrips.filter(t => t.shift === 'บ่าย').length,
+        'ดึก': dayTrips.filter(t => t.shift === 'ดึก').length,
+      });
+    }
+    return data;
+  }, [trips, selectedMonth, selectedYear]);
 
   const inspectionRatesByVehicle = useMemo(() => {
     return vehicles.map(v => {
@@ -160,12 +194,19 @@ const App = () => {
     const dataMap = {};
     speedingTrips.forEach(t => {
       if (!dataMap[t.driverName]) {
-        dataMap[t.driverName] = { name: t.driverName, total: 0, totalOffset: 0.01 };
+        dataMap[t.driverName] = { name: t.driverName, total: 0, totalOffset: 0.01, durationMinutes: 0 };
         vehicles.forEach(v => dataMap[t.driverName][v.plate] = 0);
       }
       dataMap[t.driverName][t.vehiclePlate] += 1;
       dataMap[t.driverName].total += 1;
+      dataMap[t.driverName].durationMinutes += (t.durationMinutes || 0);
     });
+    
+    // Round duration
+    Object.values(dataMap).forEach(d => {
+      d.durationMinutes = Math.round(d.durationMinutes * 10) / 10;
+    });
+    
     return Object.values(dataMap).sort((a,b) => b.total - a.total);
   }, [speedingTrips]);
 
@@ -273,10 +314,14 @@ const App = () => {
       <div className="summary-cards">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">พนักงานขับรถ</span>
-            <div className="card-icon info"><Users size={20} /></div>
+            <span className="card-title">ความเร็วสูงสุดในเดือนนี้</span>
+            <div className="card-icon warning"><Gauge size={20} /></div>
           </div>
-          <div className="card-value">{totalDriversCount} <span className="card-subvalue">คน</span></div>
+          {maxSpeedTrip ? (
+            <div className="card-value">{maxSpeedTrip.maxSpeed} <span className="card-subvalue">กม./ชม. ({maxSpeedTrip.driverName})</span></div>
+          ) : (
+            <div className="card-value">- <span className="card-subvalue">กม./ชม.</span></div>
+          )}
         </div>
 
         <div className="card">
@@ -360,6 +405,101 @@ const App = () => {
                 ไม่มีสถิติขับรถเร็วใน{isMonthSelected ? 'เดือนนี้' : 'ปีนี้'} 🎉
               </div>
             )}
+          </div>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#64748b' }}>
+            *หมายเหตุ: จำนวนครั้งของการขับรถเร็วนับจากการขับเร็วตั้งแต่ 90 กม./ชม. เกิน 5 นาที
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <Activity size={24} style={{ color: 'var(--danger)' }} />
+            <h2 className="panel-title">ระยะเวลารวมที่ขับรถเร็วเกิน 90 กม./ชม. แยกคนขับ (นาที)</h2>
+          </div>
+          <div style={{ height: 320 }}>
+            {speedingByDriver.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={speedingByDriver} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={14} tick={{fill: '#0f172a'}} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={14} tick={{fill: '#64748b'}} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    cursor={{fill: '#f1f5f9'}}
+                    formatter={(value) => [`${value} นาที`, 'ระยะเวลา']}
+                  />
+                  <Bar dataKey="durationMinutes" fill="#ef4444" name="ระยะเวลา (นาที)" barSize={50}>
+                    <LabelList dataKey="durationMinutes" position="top" fill="#0f172a" fontSize={12} fontWeight="bold" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="empty-state">ไม่มีข้อมูลการขับรถเร็ว</div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="panel-header">
+            <Activity size={24} style={{ color: 'var(--primary)' }} />
+            <h2 className="panel-title">กราฟจำนวนรอบการขับรถส่งต่อรายวัน แยกตามเวร (ไม่รวมเติมน้ำมัน)</h2>
+          </div>
+          <div style={{ height: 320 }}>
+            {isMonthSelected && dailyShiftTrips.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyShiftTrips} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" stroke="#64748b" fontSize={14} tick={{fill: '#0f172a'}} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={14} tick={{fill: '#64748b'}} allowDecimals={false} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    cursor={{fill: '#f1f5f9'}}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
+                  <Bar dataKey="เช้า" stackId="a" fill="#3b82f6" name="เวรเช้า" />
+                  <Bar dataKey="บ่าย" stackId="a" fill="#f59e0b" name="เวรบ่าย" />
+                  <Bar dataKey="ดึก" stackId="a" fill="#8b5cf6" name="เวรดึก" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="empty-state">
+                {isMonthSelected ? 'ไม่มีข้อมูลการขับรถส่งต่อในเดือนนี้' : 'กรุณาเลือกเดือนเพื่อดูกราฟรายวัน'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="panel-header">
+            <Fuel size={24} style={{ color: 'var(--primary)' }} />
+            <h2 className="panel-title">สรุปการใช้รถ ค่าน้ำมัน และระยะทาง แยกตามคัน</h2>
+          </div>
+          <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.95rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>ทะเบียนรถ</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>รวมระยะทาง (กม.)</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>ค่าน้ำมัน (บาท)</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>ปริมาณน้ำมัน (ลิตร)</th>
+                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>อัตราสิ้นเปลือง (กม./ลิตร)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fuelAndDistanceSummary.map(v => {
+                  const fuelEconomy = v.totalFuelVolume > 0 ? (v.totalDistance / v.totalFuelVolume).toFixed(2) : '-';
+                  return (
+                    <tr key={v.plate} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: v.color }}>{v.plate}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{v.totalDistance.toLocaleString()}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{v.totalFuelCost.toLocaleString()}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{v.totalFuelVolume.toLocaleString()}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{fuelEconomy}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 
