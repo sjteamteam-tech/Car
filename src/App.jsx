@@ -324,7 +324,7 @@ const App = () => {
       <div className="summary-cards">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">ความเร็วสูงสุดแต่ละคน (>90)</span>
+            <span className="card-title">ความเร็วสูงสุดแต่ละคน (&gt;90)</span>
             <div className="card-icon warning"><Gauge size={20} /></div>
           </div>
           <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
