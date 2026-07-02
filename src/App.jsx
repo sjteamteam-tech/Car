@@ -39,8 +39,8 @@ const App = () => {
     loadData();
   }, []);
 
-  const { trips, inspections, risks } = useMemo(() => {
-    if (!liveData) return { trips: [], inspections: [], risks: [] };
+  const { trips, inspections, risks, alcoholTests } = useMemo(() => {
+    if (!liveData) return { trips: [], inspections: [], risks: [], alcoholTests: [] };
     
     const filteredTrips = liveData.allTrips.filter(t => 
       t.year === selectedYear && (selectedMonth === 0 || t.month === selectedMonth)
@@ -114,13 +114,87 @@ const App = () => {
       }
     }
 
-    return { trips: filteredTrips, inspections: processedInspections, risks: filteredRisks };
+        const filteredAlcohol = liveData.alcoholTests ? liveData.alcoholTests.filter(a => 
+      a.year === selectedYear && (selectedMonth === 0 || a.month === selectedMonth)
+    ) : [];
+    return { trips: filteredTrips, inspections: processedInspections, risks: filteredRisks, alcoholTests: filteredAlcohol };
   }, [liveData, selectedYear, selectedMonth]);
 
   const totalTrips = trips.filter(t => t.source === 'usage').length;
   const speedingTrips = trips.filter(t => t.isSpeeding);
   const totalSpeeding = speedingTrips.length;
   const totalRisks = risks.length;
+
+  const alcoholCompliance = useMemo(() => {
+    const compliance = [];
+    const missingAlerts = [];
+    let totalTests = 0;
+    let totalFailed = 0;
+    let totalMissing = 0;
+
+    drivers.forEach(driver => {
+      const morningTrips = trips.filter(t => t.driverName === driver.name && t.shift === 'เช้า');
+      const workedDays = new Set(morningTrips.map(t => `${t.year}-${t.month}-${t.day}`));
+      const morningReq = workedDays.size;
+
+      const morningTests = alcoholTests.filter(a => a.driverName === driver.name && a.shift === 'เช้า');
+      const testedDays = new Set(morningTests.map(a => `${a.year}-${a.month}-${a.day}`));
+      const morningDone = testedDays.size;
+
+      const afterNightTrips = trips.filter(t => t.driverName === driver.name && (t.shift === 'บ่าย' || t.shift === 'ดึก') && !t.isRefuel);
+      const afterNightReq = afterNightTrips.length;
+
+      const afterNightTests = alcoholTests.filter(a => a.driverName === driver.name && (a.shift === 'บ่าย' || a.shift === 'ดึก'));
+      const afterNightDone = afterNightTests.length;
+
+      const driverTotalReq = morningReq + afterNightReq;
+      const driverTotalDone = morningDone + afterNightDone;
+      const rate = driverTotalReq > 0 ? Math.round((Math.min(driverTotalDone, driverTotalReq) / driverTotalReq) * 100) : 100;
+      
+      let status = '🟢 ดีเยี่ยม';
+      if (driverTotalDone < driverTotalReq) status = `🟡 ขาด ${driverTotalReq - driverTotalDone} ครั้ง`;
+      if (rate < 80) status = `🔴 ขาดเยอะ (${rate}%)`;
+
+      compliance.push({
+        name: driver.name,
+        morningReq, morningDone,
+        afterNightReq, afterNightDone,
+        rate, status
+      });
+
+      totalTests += driverTotalDone;
+      totalMissing += Math.max(0, driverTotalReq - driverTotalDone);
+
+      workedDays.forEach(dateStr => {
+        if (!testedDays.has(dateStr)) {
+          missingAlerts.push(`วันที่ ${dateStr} | เวรเช้า | ${driver.name} (มาทำงานแต่ไม่พบผลตรวจ)`);
+        }
+      });
+
+      const anTripsByDay = {};
+      afterNightTrips.forEach(t => {
+        const d = `${t.year}-${t.month}-${t.day}`;
+        anTripsByDay[d] = (anTripsByDay[d] || 0) + 1;
+      });
+      const anTestsByDay = {};
+      afterNightTests.forEach(a => {
+        const d = `${a.year}-${a.month}-${a.day}`;
+        anTestsByDay[d] = (anTestsByDay[d] || 0) + 1;
+      });
+      Object.keys(anTripsByDay).forEach(dateStr => {
+        const req = anTripsByDay[dateStr];
+        const done = anTestsByDay[dateStr] || 0;
+        if (done < req) {
+          missingAlerts.push(`วันที่ ${dateStr} | เวรบ่าย/ดึก | ${driver.name} (วิ่งรถ ${req} รอบ แต่ตรวจ ${done} ครั้ง)`);
+        }
+      });
+    });
+
+    totalFailed = alcoholTests.filter(a => a.isFailed).length;
+    missingAlerts.sort();
+
+    return { compliance, missingAlerts, totalTests, totalFailed, totalMissing };
+  }, [trips, alcoholTests]);
 
   const maxSpeedTrip = useMemo(() => {
     return speedingTrips.length > 0 ? speedingTrips.reduce((prev, current) => (prev.maxSpeed > current.maxSpeed) ? prev : current) : null;
