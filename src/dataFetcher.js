@@ -5,10 +5,9 @@ const SHEET_URLS = {
   inspections: 'https://docs.google.com/spreadsheets/d/1vSDhMOr7A2iKfzvP9Cv_nSKJkJk0kYCLHLPGdCzqzs0/export?format=csv&gid=1907779796',
   speeding: 'https://docs.google.com/spreadsheets/d/1fPL_eTSRUBIlgrwF0MwjEOeEN6YVfHi9eoCoSaNsy3g/export?format=csv&gid=239312134',
   usage_9647: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=0',
-  usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1510255099',
-  usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1055722390',
-  risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0',
-  alcohol: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5XuyW3hQYtwmFSi6DeNoS2taSPX8xx6UVOLVql8taqKcm6TDpo44OPN3cLFKj4W72nBNpv8kicodv/pub?output=csv'
+  usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1535938534',
+  usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=366393931',
+  risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0'
 };
 
 const parseCSV = async (url) => {
@@ -78,22 +77,13 @@ const normalizePlate = (str) => {
 
 export const fetchDashboardData = async () => {
   try {
-    const [
-      inspectionsRaw, 
-      speedingRaw, 
-      usage9647Raw, 
-      usage3500Raw, 
-      usage9919Raw,
-      risksRaw,
-      alcoholRaw
-    ] = await Promise.all([
+    const [inspectionsRaw, speedingRaw, usage9647Raw, usage3500Raw, usage9919Raw, risksRaw] = await Promise.all([
       parseCSV(SHEET_URLS.inspections),
       parseCSV(SHEET_URLS.speeding),
       parseCSV(SHEET_URLS.usage_9647),
       parseCSV(SHEET_URLS.usage_3500),
       parseCSV(SHEET_URLS.usage_9919),
-      parseCSV(SHEET_URLS.risks),
-      parseCSV(SHEET_URLS.alcohol)
+      parseCSV(SHEET_URLS.risks)
     ]);
 
     const allTrips = [];
@@ -209,76 +199,42 @@ export const fetchDashboardData = async () => {
     processUsage(usage9919Raw, 'ช9919');
 
     // Process Risks
-    if (risksRaw && risksRaw.length > 0) {
-      risksRaw.forEach((row, idx) => {
-        const keys = Object.keys(row);
-        let ts = row['วันที่เกิดเหตุ'] || row['ประทับเวลา'];
-        if (!ts) {
-          const dateKey = keys.find(k => k.includes('วันที่') || k.includes('เวลา'));
-          if (dateKey) ts = row[dateKey];
-        }
-        if (!ts && keys.length > 0) ts = row[keys[0]];
-        if (!ts) return;
+    // Headers: วันที่เกิดเหตุ, เวลา, ทะเบียนรถ, พนักงานขับรถ, รายละเอียดเหตุการณ์, สถานที่เกิดเหตุ
+    risksRaw.forEach((row, idx) => {
+      const keys = Object.keys(row);
+      // Try exact match first
+      let ts = row['วันที่เกิดเหตุ'] || row['ประทับเวลา'];
+      // Fallback to substring match (handles BOM)
+      if (!ts) {
+        const dateKey = keys.find(k => k.includes('วันที่') || k.includes('เวลา'));
+        if (dateKey) ts = row[dateKey];
+      }
+      // Absolute fallback to first column
+      if (!ts && keys.length > 0) {
+        ts = row[keys[0]];
+      }
 
-        const dateInfo = parseDate(ts);
-        if (dateInfo) {
-          allRisks.push({
-            id: `risk_${idx}`,
-            date: ts,
-            year: dateInfo.year,
-            month: dateInfo.month,
-            day: dateInfo.day,
-            hour: dateInfo.hour,
-            period: dateInfo.hour < 12 ? 'morning' : 'evening',
-            vehiclePlate: normalizePlate(row['ทะเบียนรถ'] || row[keys.find(k => k.includes('ทะเบียน'))]),
-            driverName: row['พนักงานขับรถ'] || row[keys.find(k => k.includes('พนักงาน'))],
-            details: row['รายละเอียดเหตุการณ์'] || row[keys.find(k => k.includes('รายละเอียด'))],
-            location: row['สถานที่เกิดเหตุ'] || row[keys.find(k => k.includes('สถานที่'))]
-          });
-        }
-      });
-    }
+      if (!ts) return;
+      const dateInfo = parseDate(ts);
+      if (dateInfo) {
+        allRisks.push({
+          id: `risk_${idx}`,
+          date: ts,
+          year: dateInfo.year,
+          month: dateInfo.month,
+          day: dateInfo.day,
+          hour: dateInfo.hour,
+          period: dateInfo.hour < 12 ? 'morning' : 'evening',
+          vehiclePlate: normalizePlate(row['ทะเบียนรถ'] || row[keys.find(k => k.includes('ทะเบียน'))]),
+          driverName: row['พนักงานขับรถ'] || row[keys.find(k => k.includes('พนักงาน'))],
+          details: row['รายละเอียดเหตุการณ์'] || row[keys.find(k => k.includes('รายละเอียด'))],
+          location: row['สถานที่เกิดเหตุ'] || row[keys.find(k => k.includes('สถานที่'))]
+        });
+      }
+    });
 
-    // Process Alcohol Tests
-    const alcoholTests = [];
-    if (alcoholRaw && alcoholRaw.length > 0) {
-      alcoholRaw.forEach((row, idx) => {
-        const ts = row['วัน-เดือน-ปี ที่ทำการตรวจวัดปริมาณแอลกอฮอล์'] || row['ประทับเวลา'];
-        const dateInfo = parseDate(ts);
-        if (dateInfo) {
-          let shift = row['ช่วงเวลาในการตรวจปริมาณแอลกอฮอล์'] || '';
-          if (shift.includes('เช้า')) shift = 'เช้า';
-          else if (shift.includes('บ่าย')) shift = 'บ่าย';
-          else if (shift.includes('ดึก')) shift = 'ดึก';
-          else shift = 'ไม่ระบุ';
-
-          const driverRaw = row['ชื่อ-สกุล พนักงานขับรถที่เข้ารับการตรวจปริมาณแอลกอออล์'] || '';
-          const driverName = driverRaw.replace(/^[0-9]+\.\s*/, '').replace(/นาย|นาง|นางสาว/g, '').trim().split(' ')[0];
-
-          const alcoholLevelStr = row['ปริมาณแอลกอฮอล์ที่ตรวจวัดได้'] || '0';
-          const isFailed = parseFloat(alcoholLevelStr) > 0;
-
-          alcoholTests.push({
-            id: `alc_${idx}`,
-            date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
-            year: dateInfo.year,
-            month: dateInfo.month,
-            day: dateInfo.day,
-            shift: shift,
-            driverName: driverName,
-            isFailed: isFailed,
-            level: alcoholLevelStr
-          });
-        }
-      });
-    }
-
-    return {
-      allTrips,
-      allInspections,
-      risks: allRisks,
-      alcoholTests: alcoholTests
-    };
+    // Return the aggregated real data
+    return { allTrips, allInspections, risks: allRisks }; 
   } catch (error) {
     console.error("Error fetching data:", error);
     throw error;
