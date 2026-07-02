@@ -122,8 +122,18 @@ const App = () => {
   const totalSpeeding = speedingTrips.length;
   const totalRisks = risks.length;
 
-  const maxSpeedTrip = useMemo(() => {
-    return speedingTrips.length > 0 ? speedingTrips.reduce((prev, current) => (prev.maxSpeed > current.maxSpeed) ? prev : current) : null;
+  const maxSpeedsByDriver = useMemo(() => {
+    if (speedingTrips.length === 0) return [];
+    const maxByDriver = {};
+    speedingTrips.forEach(trip => {
+      const driver = trip.driverName;
+      if (!maxByDriver[driver] || trip.maxSpeed > maxByDriver[driver]) {
+        maxByDriver[driver] = trip.maxSpeed;
+      }
+    });
+    return Object.entries(maxByDriver)
+      .map(([name, maxSpeed]) => ({ name, maxSpeed }))
+      .sort((a, b) => b.maxSpeed - a.maxSpeed);
   }, [speedingTrips]);
 
   const fuelAndDistanceSummary = useMemo(() => {
@@ -314,14 +324,23 @@ const App = () => {
       <div className="summary-cards">
         <div className="card">
           <div className="card-header">
-            <span className="card-title">ความเร็วสูงสุดในเดือนนี้</span>
+            <span className="card-title">ความเร็วสูงสุดแต่ละคน (>90)</span>
             <div className="card-icon warning"><Gauge size={20} /></div>
           </div>
-          {maxSpeedTrip ? (
-            <div className="card-value">{maxSpeedTrip.maxSpeed} <span className="card-subvalue">กม./ชม. ({maxSpeedTrip.driverName})</span></div>
-          ) : (
-            <div className="card-value">- <span className="card-subvalue">กม./ชม.</span></div>
-          )}
+          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {maxSpeedsByDriver.length > 0 ? (
+              maxSpeedsByDriver.map((driver, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.25rem' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>{driver.name}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--danger)' }}>
+                    {driver.maxSpeed} <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--text-light)' }}>กม./ชม.</span>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-light)', textAlign: 'center', padding: '1rem 0' }}>ไม่มีข้อมูลความเร็วเกิน 90 กม./ชม.</div>
+            )}
+          </div>
         </div>
 
         <div className="card">
