@@ -34,11 +34,16 @@ const parseCSV = async (url) => {
 const parseDate = (dateStr) => {
   if (!dateStr) return null;
   let dStr = dateStr.split(' ')[0]; // get just the date part
+  let timeStr = dateStr.split(' ')[1];
+  let hour = 12; // default
+  if (timeStr) {
+    hour = parseInt(timeStr.split(':')[0], 10);
+  }
   
   if (dStr.includes('-')) {
     const parts = dStr.split('-');
     if (parts.length === 3) {
-      return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10) };
+      return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10), hour };
     }
   }
 
@@ -56,7 +61,7 @@ const parseDate = (dateStr) => {
       year = year - 543;
     }
     
-    return { year, month, day };
+    return { year, month, day, hour };
   }
   return null;
 };
@@ -87,26 +92,27 @@ export const fetchDashboardData = async () => {
 
     // Process Inspections
     // Headers: ประทับเวลา, ชื่อผู้ตรวจสอบความพร้อมใช้  >>, ตรวจสอบรถReferคัน >>
-    inspectionsRaw.forEach(row => {
+    inspectionsRaw.forEach((row, idx) => {
       const ts = row['ประทับเวลา'];
       const dateInfo = parseDate(ts);
       if (dateInfo) {
         const plateRaw = row['ตรวจสอบรถReferคัน >>'];
         const plate = normalizePlate(plateRaw);
-        const time = ts.split(', ')[1] || '00:00:00';
         const inspectorFullName = row['ชื่อผู้ตรวจสอบความพร้อมใช้  >>'] || 'ไม่ระบุ';
         const inspectorName = inspectorFullName.replace('นาย', '').split(' ')[0];
 
         allInspections.push({
+          id: `insp_${idx}`,
           date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
           year: dateInfo.year,
           month: dateInfo.month,
           day: dateInfo.day,
+          hour: dateInfo.hour,
+          period: dateInfo.hour < 12 ? 'morning' : 'evening',
           vehiclePlate: plate,
           vehicleId: vehicles.find(v => v.plate === plate)?.id || plate,
           completed: true,
-          inspectorName: inspectorName,
-          time: time
+          inspectorName: inspectorName
         });
       }
     });
@@ -124,9 +130,6 @@ export const fetchDashboardData = async () => {
         // Count as speeding if Max Speed > 90
         const isSpeeding = speed > 90;
 
-        // Even if the speeding sheet has all records, we mostly care about those over limit for the chart, 
-        // but let's store all of them or just the speeding ones. The requirement focuses on over 90.
-        // Actually, the app logic filters by `t.isSpeeding`.
         allTrips.push({
           id: `speed_${idx}`,
           date: `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}-${String(dateInfo.day).padStart(2, '0')}`,
@@ -200,6 +203,8 @@ export const fetchDashboardData = async () => {
           year: dateInfo.year,
           month: dateInfo.month,
           day: dateInfo.day,
+          hour: dateInfo.hour,
+          period: dateInfo.hour < 12 ? 'morning' : 'evening',
           vehiclePlate: normalizePlate(row['ทะเบียนรถ'] || row[keys.find(k => k.includes('ทะเบียน'))]),
           driverName: row['พนักงานขับรถ'] || row[keys.find(k => k.includes('พนักงาน'))],
           details: row['รายละเอียดเหตุการณ์'] || row[keys.find(k => k.includes('รายละเอียด'))],

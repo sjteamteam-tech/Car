@@ -61,27 +61,54 @@ const App = () => {
       const currentMonth = new Date().getMonth() + 1;
       const today = new Date().getDate();
 
+      const currentHour = new Date().getHours();
+
       if (selectedYear === currentYear && m === currentMonth) {
         limitDay = today;
       } else if (selectedYear > currentYear || (selectedYear === currentYear && m > currentMonth)) {
         limitDay = 0; 
       }
 
+      const isTwiceADayMonth = selectedYear > 2026 || (selectedYear === 2026 && m >= 7);
+
       for (let day = 1; day <= limitDay; day++) {
         vehicles.forEach(vehicle => {
-          const record = liveData.allInspections.find(i => i.year === selectedYear && i.month === m && i.day === day && i.vehiclePlate === vehicle.plate);
-          if (record) {
-            processedInspections.push({ ...record, month: m });
+          if (isTwiceADayMonth) {
+            // Check Morning
+            const morningRecord = liveData.allInspections.find(i => i.year === selectedYear && i.month === m && i.day === day && i.vehiclePlate === vehicle.plate && i.period === 'morning');
+            if (morningRecord) {
+              processedInspections.push({ ...morningRecord, month: m });
+            } else {
+              processedInspections.push({
+                year: selectedYear, month: m, day, vehiclePlate: vehicle.plate, vehicleId: vehicle.id, completed: false, period: 'morning', inspectorName: 'X'
+              });
+            }
+            
+            // Check Evening
+            let isEveningRequired = true;
+            if (selectedYear === currentYear && m === currentMonth && day === today && currentHour < 12) {
+              isEveningRequired = false; // Not required yet if it's still morning today
+            }
+            if (isEveningRequired) {
+              const eveningRecord = liveData.allInspections.find(i => i.year === selectedYear && i.month === m && i.day === day && i.vehiclePlate === vehicle.plate && i.period === 'evening');
+              if (eveningRecord) {
+                processedInspections.push({ ...eveningRecord, month: m });
+              } else {
+                processedInspections.push({
+                  year: selectedYear, month: m, day, vehiclePlate: vehicle.plate, vehicleId: vehicle.id, completed: false, period: 'evening', inspectorName: 'X'
+                });
+              }
+            }
           } else {
-            processedInspections.push({
-              year: selectedYear,
-              month: m,
-              day: day,
-              vehiclePlate: vehicle.plate,
-              vehicleId: vehicle.id,
-              completed: false,
-              inspectorName: 'X'
-            });
+            // Legacy check (once a day)
+            const record = liveData.allInspections.find(i => i.year === selectedYear && i.month === m && i.day === day && i.vehiclePlate === vehicle.plate);
+            if (record) {
+              processedInspections.push({ ...record, month: m });
+            } else {
+              processedInspections.push({
+                year: selectedYear, month: m, day, vehiclePlate: vehicle.plate, vehicleId: vehicle.id, completed: false, period: 'any', inspectorName: 'X'
+              });
+            }
           }
         });
       }
@@ -391,7 +418,9 @@ const App = () => {
                     <div className="calendar-inspections">
                       {getInspectionsForDay(day).map((ins, i) => (
                         <div key={i} className={`cal-inspect-item ${!ins.completed ? 'missed' : ''}`}>
-                          ({ins.vehiclePlate}, {ins.inspectorName})
+                          {ins.period === 'morning' && '☀️เช้า: '}
+                          {ins.period === 'evening' && '🌙เย็น: '}
+                          {ins.vehiclePlate} {ins.completed ? `(${ins.inspectorName})` : '(ขาด)'}
                         </div>
                       ))}
                     </div>
@@ -405,6 +434,48 @@ const App = () => {
             เลือกเดือนที่ต้องการ เพื่อดูปฏิทินการตรวจสภาพรถแบบรายวัน
           </div>
         )}
+        
+        <div style={{ marginTop: '1.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+            <ClipboardCheck size={20} style={{ color: 'var(--primary)' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>รายการตรวจเช็คความพร้อมใช้รถประจำวัน (25 รายการ)</h3>
+          </div>
+          <ol style={{ 
+            fontSize: '0.9rem', 
+            color: '#475569', 
+            columnCount: 2, 
+            columnGap: '2rem',
+            paddingLeft: '1.5rem', 
+            margin: 0,
+            lineHeight: '1.6'
+          }}>
+            <li>ระดับน้ำมันเชื้อเพลิง</li>
+            <li>ระยะทางปัจจุบัน</li>
+            <li>เข็มขัดนิรภัย</li>
+            <li>ความพร้อมใช้งานออกซิเจนประจำรถ Refer</li>
+            <li>ประกันรถ</li>
+            <li>พรบ.รถ</li>
+            <li>ภาษีรถ</li>
+            <li>แบตเตอรี่รถ</li>
+            <li>สี/รอยบุบ/รอยขูดขีด รอบคัน</li>
+            <li>ระดับน้ำมันเครื่อง</li>
+            <li>ไฟแสงสว่างหน้า ซ้าย - ขวา และไฟหรี่รอบคันรถ</li>
+            <li>สัญญาณไฟเลี้ยวหน้า (ไฟหน้า) ซ้าย-ขวา</li>
+            <li>สัญญาณไฟเลี้ยวหลัง(ไฟท้าย) ซ้าย-ขวา</li>
+            <li>สัญญาณไฟแจ้งเมื่อถอยหลัง</li>
+            <li>กล้องหน้ารถ - กล้องหลังรถ – GPS</li>
+            <li>กล้องภายใน-ภายนอกรถ/GPS</li>
+            <li>ระบบรูดบัตรขับขี่และระบบGPS</li>
+            <li>ลมยาง ล้อหน้า (ซ้าย - ขวา)</li>
+            <li>ลมยาง ล้อหลัง (ซ้าย - ขวา)</li>
+            <li>ความสะอาด/ความพร้อมใช้ของรถส่งต่อผู้ป่วย [ถังขยะติดเชื้อ] [เปลนอนส่งต่อผู้ป่วย] [ความสะอาดเครื่องมือแพทย์] [อุปกรณ์น้ำยาฆ่าเชื้อ]</li>
+            <li>ความตึงและสภาพสายพาน</li>
+            <li>ความพร้อมใช้ของหน้าปัดน้ำฝน/น้ำหน้าปัดน้ำฝน</li>
+            <li>ระดับน้ำมันพวงมาลัยพาวเวอร์</li>
+            <li>ระดับน้ำยาหล่อเย็น(หม้อน้ำ)</li>
+            <li>ความพร้อมใช้ระดับน้ำมันเบรก</li>
+          </ol>
+        </div>
       </div>
 
     </div>
