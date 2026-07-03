@@ -20,7 +20,7 @@ const App = () => {
   const [selectedMonth, setSelectedMonth] = useState(6); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [liveData, setLiveData] = useState({ allTrips: [], allInspections: [], risks: [] });
+  const [liveData, setLiveData] = useState({ allTrips: [], allInspections: [], risks: [], alcoholTests: [] });
 
   useEffect(() => {
     const loadData = async () => {
@@ -39,14 +39,17 @@ const App = () => {
     loadData();
   }, []);
 
-  const { trips, inspections, risks } = useMemo(() => {
-    if (!liveData) return { trips: [], inspections: [], risks: [] };
+  const { trips, inspections, risks, alcoholTests } = useMemo(() => {
+    if (!liveData) return { trips: [], inspections: [], risks: [], alcoholTests: [] };
     
     const filteredTrips = liveData.allTrips.filter(t => 
       t.year === selectedYear && (selectedMonth === 0 || t.month === selectedMonth)
     );
     const filteredRisks = liveData.risks.filter(r => 
       r.year === selectedYear && (selectedMonth === 0 || r.month === selectedMonth)
+    );
+    const filteredAlcoholTests = (liveData.alcoholTests || []).filter(a =>
+      a.year === selectedYear && (selectedMonth === 0 || a.month === selectedMonth)
     );
     
     let processedInspections = [];
@@ -114,7 +117,7 @@ const App = () => {
       }
     }
 
-    return { trips: filteredTrips, inspections: processedInspections, risks: filteredRisks };
+    return { trips: filteredTrips, inspections: processedInspections, risks: filteredRisks, alcoholTests: filteredAlcoholTests };
   }, [liveData, selectedYear, selectedMonth]);
 
   const totalTrips = trips.filter(t => t.source === 'usage').length;
@@ -127,6 +130,54 @@ const App = () => {
   const speedingTrips = trips.filter(t => t.isSpeeding);
   const totalSpeeding = speedingTrips.length;
   const totalRisks = risks.length;
+
+  const alcoholSummary = useMemo(() => {
+    const tests = alcoholTests || [];
+    const totalTests = tests.length;
+    const failedTests = tests.filter(t => t.level > 0).length;
+    
+    const transferTripsData = trips.filter(t => t.source === 'usage' && !t.isRefuel);
+    const missingTests = [];
+    
+    const tripsGrouped = {};
+    transferTripsData.forEach(t => {
+      const key = `${t.year}-${t.month}-${t.day}_${t.driverName}_${t.shift}`;
+      if (!tripsGrouped[key]) {
+        tripsGrouped[key] = { year: t.year, month: t.month, day: t.day, driverName: t.driverName, shift: t.shift, count: 0 };
+      }
+      tripsGrouped[key].count++;
+    });
+    
+    const testsGrouped = {};
+    tests.forEach(t => {
+      const key = `${t.year}-${t.month}-${t.day}_${t.driverName}_${t.shift}`;
+      if (!testsGrouped[key]) testsGrouped[key] = 0;
+      testsGrouped[key]++;
+    });
+    
+    Object.values(tripsGrouped).forEach(group => {
+      const key = `${group.year}-${group.month}-${group.day}_${group.driverName}_${group.shift}`;
+      const testCount = testsGrouped[key] || 0;
+      
+      if (group.shift === 'เช้า') {
+        if (testCount < 1) {
+          missingTests.push({ ...group, required: 1, actual: testCount, missing: 1, type: 'เวรเช้า (เป่า 1 ครั้ง/วัน)' });
+        }
+      } else {
+        if (testCount < group.count) {
+          missingTests.push({ ...group, required: group.count, actual: testCount, missing: group.count - testCount, type: `${group.shift} (เป่าทุกรอบส่งต่อ)` });
+        }
+      }
+    });
+    
+    missingTests.sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      if (a.month !== b.month) return b.month - a.month;
+      return b.day - a.day;
+    });
+    
+    return { totalTests, failedTests, missingTests };
+  }, [trips, alcoholTests]);
 
   const maxSpeedsByDriver = useMemo(() => {
     if (speedingTrips.length === 0) return [];
@@ -511,6 +562,66 @@ const App = () => {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="panel-header">
+            <ShieldAlert size={24} style={{ color: 'var(--primary)' }} />
+            <h2 className="panel-title">รายงานการตรวจสอบเป่าแอลกอฮอล์</h2>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ backgroundColor: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600 }}>จำนวนการตรวจทั้งหมด</span>
+              <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)' }}>{alcoholSummary.totalTests} <span style={{fontSize:'1rem', fontWeight:'normal'}}>ครั้ง</span></span>
+            </div>
+            <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.9rem', color: '#ef4444', fontWeight: 600 }}>พบแอลกอฮอล์ (ไม่ผ่าน)</span>
+              <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ef4444' }}>{alcoholSummary.failedTests} <span style={{fontSize:'1rem', fontWeight:'normal'}}>ครั้ง</span></span>
+            </div>
+            <div style={{ backgroundColor: '#fffbeb', padding: '1rem', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.9rem', color: '#d97706', fontWeight: 600 }}>รายการขาดตรวจ</span>
+              <span style={{ fontSize: '2rem', fontWeight: 'bold', color: '#d97706' }}>{alcoholSummary.missingTests.reduce((sum, t) => sum + t.missing, 0)} <span style={{fontSize:'1rem', fontWeight:'normal'}}>ครั้ง</span></span>
+            </div>
+          </div>
+
+          {alcoholSummary.missingTests.length > 0 ? (
+            <div style={{ marginTop: '1.5rem' }}>
+              <h3 style={{ fontSize: '1rem', color: '#d97706', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertTriangle size={18} /> แจ้งเตือน: พนักงานที่ขาดการตรวจเป่าแอลกอฮอล์
+              </h3>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#fef3c7', borderBottom: '2px solid #fde68a' }}>
+                      <th style={{ padding: '0.75rem', color: '#92400e' }}>วันที่</th>
+                      <th style={{ padding: '0.75rem', color: '#92400e' }}>พนักงานขับรถ</th>
+                      <th style={{ padding: '0.75rem', color: '#92400e' }}>เงื่อนไข (เวร)</th>
+                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>จำนวนที่ต้องเป่า</th>
+                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>เป่าจริง</th>
+                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>ขาดตรวจ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alcoholSummary.missingTests.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #fde68a' }}>
+                        <td style={{ padding: '0.75rem' }}>{item.day}/{item.month}/{item.year}</td>
+                        <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.driverName}</td>
+                        <td style={{ padding: '0.75rem' }}>{item.type}</td>
+                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.required}</td>
+                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.actual}</td>
+                        <td style={{ padding: '0.75rem', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }}>{item.missing}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', color: '#047857', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+              <CheckCircle size={20} /> ยอดเยี่ยม! ไม่พบรายการขาดตรวจแอลกอฮอล์ในเดือนนี้
+            </div>
+          )}
         </div>
 
         <div className="panel" style={{ gridColumn: '1 / -1' }}>
