@@ -8,7 +8,7 @@ const SHEET_URLS = {
   usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1510255099',
   usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1055722390',
   risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0',
-  alcohol: 'https://docs.google.com/spreadsheets/d/14nJzokI9OUS8_Cwd-qBUmbtZPZbqYjk_thUSizGi5kA/gviz/tq?tqx=out:csv'
+  alcohol: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTmvjvN6bp3LPDP7Cz8zaZwNgkLThxqwQpj2Zm_6UDnMtEhO8hiTJlhWk-mWdnG7PLYr-s74uvw8qH/pub?output=csv'
 };
 
 const parseCSV = async (url) => {
@@ -247,21 +247,27 @@ export const fetchDashboardData = async () => {
     const alcoholTests = [];
     if (alcoholRaw && alcoholRaw.length > 0) {
       alcoholRaw.forEach((row, idx) => {
-        const ts = row['วัน-เดือน-ปี ที่ทำการตรวจวัดปริมาณแอลกอฮอล์'] || row['ประทับเวลา'];
+        const keys = Object.keys(row);
+        const ts = row[keys[1]] || row[keys[0]]; 
         const dateInfo = parseDate(ts);
         if (!dateInfo) return;
         
-        let driverRaw = row['ชื่อ-สกุล พนักงานขับรถที่เข้ารับการตรวจปริมาณแอลกอออล์'] || '';
+        let driverRaw = (row[keys[5]] || '').toString();
         let driverName = driverRaw.replace(/^[0-9\.\s]+/, '').replace(/นาย|นางสาว|นาง/g, '').trim().split(' ')[0];
         
-        let shiftStr = row['ช่วงเวลาในการตรวจปริมาณแอลกอฮอล์'] || '';
+        let shiftStr = (row[keys[2]] || '').toString();
         let shift = 'เช้า';
         if (shiftStr.includes('บ่าย') || shiftStr.includes('16.00')) shift = 'บ่าย';
         else if (shiftStr.includes('ดึก') || shiftStr.includes('00.00')) shift = 'ดึก';
         
-        let alcoholLevelRaw = row['ปริมาณแอลกอฮอล์ที่ตรวจวัดได้'] || '0';
+        let alcoholLevelRaw = (row[keys[6]] || '0').toString();
         let levelMatch = alcoholLevelRaw.match(/\d+/);
         let level = levelMatch ? parseInt(levelMatch[0], 10) : 0;
+        
+        let resultStr = (row[keys[8]] || '').toString();
+        if (resultStr.includes('ไม่ผ่าน')) {
+          level = Math.max(level, 1);
+        }
         
         alcoholTests.push({
           id: `alc-${idx}`,
