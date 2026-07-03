@@ -604,7 +604,7 @@ const App = () => {
 
           <div style={{ height: 320, marginTop: '2rem' }}>
             <h3 style={{ fontSize: '1rem', color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Activity size={18} color="var(--primary)" /> กราฟเปรียบเทียบ จำนวนที่ต้องเป่า vs เป่าจริง แยกตามเวร
+              <Activity size={18} color="var(--primary)" /> กราฟจำนวนการตรวจเป่าแอลกอฮอล์ แยกตามเวร
             </h3>
             {isMonthSelected && alcoholSummary.chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -617,15 +617,6 @@ const App = () => {
                     cursor={{fill: '#f1f5f9'}}
                   />
                   <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
-                  <Bar dataKey="reqN" stackId="req" fill="#c4b5fd" name="ต้องเป่า (ดึก)">
-                    <LabelList dataKey="reqN" content={renderCustomBarLabel} />
-                  </Bar>
-                  <Bar dataKey="reqA" stackId="req" fill="#fcd34d" name="ต้องเป่า (บ่าย)">
-                    <LabelList dataKey="reqA" content={renderCustomBarLabel} />
-                  </Bar>
-                  <Bar dataKey="reqM" stackId="req" fill="#93c5fd" name="ต้องเป่า (เช้า)">
-                    <LabelList dataKey="reqM" content={renderCustomBarLabel} />
-                  </Bar>
                   
                   <Bar dataKey="actN" stackId="act" fill="#7c3aed" name="เป่าจริง (ดึก)">
                     <LabelList dataKey="actN" content={renderCustomBarLabel} />
