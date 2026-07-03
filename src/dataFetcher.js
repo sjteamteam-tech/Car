@@ -8,7 +8,7 @@ const SHEET_URLS = {
   usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1510255099',
   usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1055722390',
   risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0',
-  alcohol: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTmvjvN6bp3LPDP7Cz8zaZwNgkLThxqwQpj2Zm_6UDnMtEhO8hiTJlhWk-mWdnG7PLYr-s74uvw8qH/pub?output=csv'
+  alcohol: 'https://docs.google.com/spreadsheets/d/14nJzokI9OUS8_Cwd-qBUmbtZPZbqYjk_thUSizGi5kA/gviz/tq?tqx=out:csv'
 };
 
 const parseCSV = async (url) => {
