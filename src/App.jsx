@@ -164,6 +164,13 @@ const App = () => {
       const key = `${t.year}-${t.month}-${t.day}_${t.driverName}_${t.shift}`;
       if (!testsGrouped[key]) testsGrouped[key] = 0;
       testsGrouped[key]++;
+      
+      const dayData = chartDataMap[t.day];
+      if (dayData && t.month === selectedMonth && t.year === selectedYear) {
+        if (t.shift === 'เช้า') dayData.actM = (dayData.actM || 0) + 1;
+        if (t.shift === 'บ่าย') dayData.actA = (dayData.actA || 0) + 1;
+        if (t.shift === 'ดึก') dayData.actN = (dayData.actN || 0) + 1;
+      }
     });
     
     Object.values(tripsGrouped).forEach(group => {
@@ -174,11 +181,10 @@ const App = () => {
       if (dayData) {
         if (group.shift === 'เช้า') {
           dayData.reqM = (dayData.reqM || 0) + 1;
-          dayData.actM = (dayData.actM || 0) + Math.min(testCount, 1);
           if (testCount < 1) missingTests.push({ ...group, required: 1, actual: testCount, missing: 1, type: 'เวรเช้า (เป่า 1 ครั้ง/วัน)' });
         } else {
-          if (group.shift === 'บ่าย') { dayData.reqA = (dayData.reqA || 0) + group.count; dayData.actA = (dayData.actA || 0) + testCount; }
-          if (group.shift === 'ดึก') { dayData.reqN = (dayData.reqN || 0) + group.count; dayData.actN = (dayData.actN || 0) + testCount; }
+          if (group.shift === 'บ่าย') { dayData.reqA = (dayData.reqA || 0) + group.count; }
+          if (group.shift === 'ดึก') { dayData.reqN = (dayData.reqN || 0) + group.count; }
           
           if (testCount < group.count) {
             missingTests.push({ ...group, required: group.count, actual: testCount, missing: group.count - testCount, type: `${group.shift} (เป่าทุกรอบส่งต่อ)` });

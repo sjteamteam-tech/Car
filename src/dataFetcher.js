@@ -257,8 +257,8 @@ export const fetchDashboardData = async () => {
         
         let shiftStr = (row[keys[2]] || '').toString();
         let shift = 'เช้า';
-        if (shiftStr.includes('บ่าย') || shiftStr.includes('16.00')) shift = 'บ่าย';
-        else if (shiftStr.includes('ดึก') || shiftStr.includes('00.00')) shift = 'ดึก';
+        if (shiftStr.includes('บ่าย')) shift = 'บ่าย';
+        else if (shiftStr.includes('ดึก')) shift = 'ดึก';
         
         let alcoholLevelRaw = (row[keys[6]] || '0').toString();
         let levelMatch = alcoholLevelRaw.match(/\d+/);
