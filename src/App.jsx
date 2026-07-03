@@ -693,7 +693,7 @@ const App = () => {
           )}
         </div>
 
-        <div className="panel" style={{ gridColumn: '1 / -1' }}>
+        <div className="panel">
           <div className="panel-header">
             <Fuel size={24} style={{ color: 'var(--primary)' }} />
             <h2 className="panel-title">สรุปการใช้รถ ค่าน้ำมัน และระยะทาง แยกตามคัน</h2>
@@ -706,19 +706,16 @@ const App = () => {
                   <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>รวมระยะทาง (กม.)</th>
                   <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>ค่าน้ำมัน (บาท)</th>
                   <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>ปริมาณน้ำมัน (ลิตร)</th>
-                  <th style={{ padding: '0.75rem 1rem', color: '#475569', fontWeight: 600 }}>อัตราสิ้นเปลือง (กม./ลิตร)</th>
                 </tr>
               </thead>
               <tbody>
                 {fuelAndDistanceSummary.map(v => {
-                  const fuelEconomy = v.totalFuelVolume > 0 ? (v.totalDistance / v.totalFuelVolume).toFixed(2) : '-';
                   return (
                     <tr key={v.plate} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: v.color }}>{v.plate}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{v.totalDistance.toLocaleString()}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{v.totalFuelCost.toLocaleString()}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{v.totalFuelVolume.toLocaleString()}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{fuelEconomy}</td>
                     </tr>
                   )
                 })}
