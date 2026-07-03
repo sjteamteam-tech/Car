@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { 
-  Activity, AlertTriangle, CheckCircle, Truck, Calendar as CalendarIcon, Users, ShieldAlert, CalendarDays, ClipboardCheck, Loader2, Gauge, Fuel
+  Activity, AlertTriangle, CheckCircle, Truck, Calendar as CalendarIcon, Users, ShieldAlert, CalendarDays, ClipboardCheck, Loader2, Gauge, Fuel, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { vehicles, drivers } from './mockData'; 
 import { fetchDashboardData } from './dataFetcher';
@@ -21,6 +21,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [liveData, setLiveData] = useState({ allTrips: [], allInspections: [], risks: [], alcoholTests: [] });
+  const [isAlcoholAlertExpanded, setIsAlcoholAlertExpanded] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -139,6 +140,16 @@ const App = () => {
     const transferTripsData = trips.filter(t => t.source === 'usage' && !t.isRefuel);
     const missingTests = [];
     
+    const daysInMonth = selectedMonth === 0 ? 31 : new Date(selectedYear, selectedMonth, 0).getDate();
+    const chartDataMap = {};
+    for (let d = 1; d <= daysInMonth; d++) {
+      chartDataMap[d] = { 
+        day: String(d), 
+        reqM: null, reqA: null, reqN: null, 
+        actM: null, actA: null, actN: null 
+      };
+    }
+    
     const tripsGrouped = {};
     transferTripsData.forEach(t => {
       const key = `${t.year}-${t.month}-${t.day}_${t.driverName}_${t.shift}`;
@@ -159,13 +170,19 @@ const App = () => {
       const key = `${group.year}-${group.month}-${group.day}_${group.driverName}_${group.shift}`;
       const testCount = testsGrouped[key] || 0;
       
-      if (group.shift === 'เช้า') {
-        if (testCount < 1) {
-          missingTests.push({ ...group, required: 1, actual: testCount, missing: 1, type: 'เวรเช้า (เป่า 1 ครั้ง/วัน)' });
-        }
-      } else {
-        if (testCount < group.count) {
-          missingTests.push({ ...group, required: group.count, actual: testCount, missing: group.count - testCount, type: `${group.shift} (เป่าทุกรอบส่งต่อ)` });
+      const dayData = chartDataMap[group.day];
+      if (dayData) {
+        if (group.shift === 'เช้า') {
+          dayData.reqM = (dayData.reqM || 0) + 1;
+          dayData.actM = (dayData.actM || 0) + Math.min(testCount, 1);
+          if (testCount < 1) missingTests.push({ ...group, required: 1, actual: testCount, missing: 1, type: 'เวรเช้า (เป่า 1 ครั้ง/วัน)' });
+        } else {
+          if (group.shift === 'บ่าย') { dayData.reqA = (dayData.reqA || 0) + group.count; dayData.actA = (dayData.actA || 0) + testCount; }
+          if (group.shift === 'ดึก') { dayData.reqN = (dayData.reqN || 0) + group.count; dayData.actN = (dayData.actN || 0) + testCount; }
+          
+          if (testCount < group.count) {
+            missingTests.push({ ...group, required: group.count, actual: testCount, missing: group.count - testCount, type: `${group.shift} (เป่าทุกรอบส่งต่อ)` });
+          }
         }
       }
     });
@@ -176,7 +193,7 @@ const App = () => {
       return b.day - a.day;
     });
     
-    return { totalTests, failedTests, missingTests };
+    return { totalTests, failedTests, missingTests, chartData: Object.values(chartDataMap) };
   }, [trips, alcoholTests]);
 
   const maxSpeedsByDriver = useMemo(() => {
@@ -585,37 +602,89 @@ const App = () => {
             </div>
           </div>
 
-          {alcoholSummary.missingTests.length > 0 ? (
-            <div style={{ marginTop: '1.5rem' }}>
-              <h3 style={{ fontSize: '1rem', color: '#d97706', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <AlertTriangle size={18} /> แจ้งเตือน: พนักงานที่ขาดการตรวจเป่าแอลกอฮอล์
-              </h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#fef3c7', borderBottom: '2px solid #fde68a' }}>
-                      <th style={{ padding: '0.75rem', color: '#92400e' }}>วันที่</th>
-                      <th style={{ padding: '0.75rem', color: '#92400e' }}>พนักงานขับรถ</th>
-                      <th style={{ padding: '0.75rem', color: '#92400e' }}>เงื่อนไข (เวร)</th>
-                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>จำนวนที่ต้องเป่า</th>
-                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>เป่าจริง</th>
-                      <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>ขาดตรวจ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alcoholSummary.missingTests.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #fde68a' }}>
-                        <td style={{ padding: '0.75rem' }}>{item.day}/{item.month}/{item.year}</td>
-                        <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.driverName}</td>
-                        <td style={{ padding: '0.75rem' }}>{item.type}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.required}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.actual}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }}>{item.missing}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div style={{ height: 320, marginTop: '2rem' }}>
+            <h3 style={{ fontSize: '1rem', color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Activity size={18} color="var(--primary)" /> กราฟเปรียบเทียบ จำนวนที่ต้องเป่า vs เป่าจริง แยกตามเวร
+            </h3>
+            {isMonthSelected && alcoholSummary.chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={alcoholSummary.chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="day" stroke="#64748b" fontSize={14} tick={{fill: '#0f172a'}} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={14} tick={{fill: '#64748b'}} allowDecimals={false} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#0f172a', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    cursor={{fill: '#f1f5f9'}}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
+                  <Bar dataKey="reqN" stackId="req" fill="#c4b5fd" name="ต้องเป่า (ดึก)">
+                    <LabelList dataKey="reqN" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="reqA" stackId="req" fill="#fcd34d" name="ต้องเป่า (บ่าย)">
+                    <LabelList dataKey="reqA" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="reqM" stackId="req" fill="#93c5fd" name="ต้องเป่า (เช้า)">
+                    <LabelList dataKey="reqM" content={renderCustomBarLabel} />
+                  </Bar>
+                  
+                  <Bar dataKey="actN" stackId="act" fill="#7c3aed" name="เป่าจริง (ดึก)">
+                    <LabelList dataKey="actN" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="actA" stackId="act" fill="#d97706" name="เป่าจริง (บ่าย)">
+                    <LabelList dataKey="actA" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="actM" stackId="act" fill="#2563eb" name="เป่าจริง (เช้า)">
+                    <LabelList dataKey="actM" content={renderCustomBarLabel} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                ไม่มีข้อมูลในเดือนที่เลือก
               </div>
+            )}
+          </div>
+
+          {alcoholSummary.missingTests.length > 0 ? (
+            <div style={{ marginTop: '2.5rem', border: '1px solid #fde68a', borderRadius: '8px', overflow: 'hidden' }}>
+              <div 
+                style={{ backgroundColor: '#fffbeb', padding: '1rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onClick={() => setIsAlcoholAlertExpanded(!isAlcoholAlertExpanded)}
+              >
+                <h3 style={{ fontSize: '1rem', color: '#d97706', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <AlertTriangle size={18} /> แจ้งเตือน: พนักงานที่ขาดการตรวจเป่าแอลกอฮอล์ ({alcoholSummary.missingTests.length} รายการ)
+                </h3>
+                {isAlcoholAlertExpanded ? <ChevronUp size={20} color="#d97706" /> : <ChevronDown size={20} color="#d97706" />}
+              </div>
+              
+              {isAlcoholAlertExpanded && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#fef3c7', borderBottom: '2px solid #fde68a' }}>
+                        <th style={{ padding: '0.75rem', color: '#92400e' }}>วันที่</th>
+                        <th style={{ padding: '0.75rem', color: '#92400e' }}>พนักงานขับรถ</th>
+                        <th style={{ padding: '0.75rem', color: '#92400e' }}>เงื่อนไข (เวร)</th>
+                        <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>จำนวนที่ต้องเป่า</th>
+                        <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>เป่าจริง</th>
+                        <th style={{ padding: '0.75rem', color: '#92400e', textAlign: 'center' }}>ขาดตรวจ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alcoholSummary.missingTests.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #fde68a' }}>
+                          <td style={{ padding: '0.75rem' }}>{item.day}/{item.month}/{item.year}</td>
+                          <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.driverName}</td>
+                          <td style={{ padding: '0.75rem' }}>{item.type}</td>
+                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.required}</td>
+                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>{item.actual}</td>
+                          <td style={{ padding: '0.75rem', textAlign: 'center', color: '#ef4444', fontWeight: 'bold' }}>{item.missing}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', color: '#047857', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
