@@ -118,6 +118,12 @@ const App = () => {
   }, [liveData, selectedYear, selectedMonth]);
 
   const totalTrips = trips.filter(t => t.source === 'usage').length;
+  const transferTrips = trips.filter(t => t.source === 'usage' && !t.isRefuel);
+  const totalTransfers = transferTrips.length;
+  const totalMorning = transferTrips.filter(t => t.shift === 'เช้า').length;
+  const totalAfternoon = transferTrips.filter(t => t.shift === 'บ่าย').length;
+  const totalNight = transferTrips.filter(t => t.shift === 'ดึก').length;
+  
   const speedingTrips = trips.filter(t => t.isSpeeding);
   const totalSpeeding = speedingTrips.length;
   const totalRisks = risks.length;
@@ -157,11 +163,16 @@ const App = () => {
     const data = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const dayTrips = trips.filter(t => !t.isRefuel && t.source === 'usage' && t.day === day);
+      const morn = dayTrips.filter(t => t.shift === 'เช้า').length;
+      const aft = dayTrips.filter(t => t.shift === 'บ่าย').length;
+      const night = dayTrips.filter(t => t.shift === 'ดึก').length;
       data.push({
-        day: day.toString(),
-        'เช้า': dayTrips.filter(t => t.shift === 'เช้า').length,
-        'บ่าย': dayTrips.filter(t => t.shift === 'บ่าย').length,
-        'ดึก': dayTrips.filter(t => t.shift === 'ดึก').length,
+        day: String(day),
+        'เช้า': morn,
+        'บ่าย': aft,
+        'ดึก': night,
+        total: morn + aft + night,
+        totalOffset: 0.0001
       });
     }
     return data;
@@ -293,7 +304,7 @@ const App = () => {
               fontSize: '1rem',
               boxShadow: '0 4px 6px -1px rgba(239, 68, 68, 0.2)'
             }}
-            onClick={() => window.open('https://script.google.com/macros/s/AKfycbyutQ-4VV-MjEUDg3uPnk5_xoc52UpqniyX4TECKW2Vsv3_Fj7ltALRDeuirVorj_4Y/exec', '_blank')}
+            onClick={() => window.open('https://script.google.com/macros/s/AKfycbwZ1xnHn9QWp2QqIQS8JFRZ8YCAurr8eB0iPozl2smWWZPSnyfd0eejyXK7piDwttSi/exec', '_blank')}
           >
             <ShieldAlert size={20} />
             รายงานความเสี่ยง
@@ -345,10 +356,15 @@ const App = () => {
 
         <div className="card">
           <div className="card-header">
-            <span className="card-title">จำนวนเที่ยวรถทั้งหมด</span>
+            <span className="card-title">รวมรอบส่งต่อ (ไม่รวมเติมน้ำมัน)</span>
             <div className="card-icon primary"><Truck size={20} /></div>
           </div>
-          <div className="card-value">{totalTrips} <span className="card-subvalue">รอบ</span></div>
+          <div className="card-value">{totalTransfers} <span className="card-subvalue">รอบ</span></div>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}>
+            <span style={{ color: '#3b82f6' }}>เช้า: {totalMorning}</span>
+            <span style={{ color: '#f59e0b' }}>บ่าย: {totalAfternoon}</span>
+            <span style={{ color: '#8b5cf6' }}>ดึก: {totalNight}</span>
+          </div>
         </div>
         
         <div className="card">
@@ -475,9 +491,18 @@ const App = () => {
                     cursor={{fill: '#f1f5f9'}}
                   />
                   <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} />
-                  <Bar dataKey="เช้า" stackId="a" fill="#3b82f6" name="เวรเช้า" />
-                  <Bar dataKey="บ่าย" stackId="a" fill="#f59e0b" name="เวรบ่าย" />
-                  <Bar dataKey="ดึก" stackId="a" fill="#8b5cf6" name="เวรดึก" />
+                  <Bar dataKey="เช้า" stackId="a" fill="#3b82f6" name="เวรเช้า">
+                    <LabelList dataKey="เช้า" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="บ่าย" stackId="a" fill="#f59e0b" name="เวรบ่าย">
+                    <LabelList dataKey="บ่าย" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="ดึก" stackId="a" fill="#8b5cf6" name="เวรดึก">
+                    <LabelList dataKey="ดึก" content={renderCustomBarLabel} />
+                  </Bar>
+                  <Bar dataKey="totalOffset" stackId="a" fill="transparent" barSize={50}>
+                    <LabelList dataKey="total" position="top" fill="#0f172a" fontSize={14} fontWeight="bold" formatter={(val) => val > 0 ? val : ''} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
