@@ -5,8 +5,8 @@ const SHEET_URLS = {
   inspections: 'https://docs.google.com/spreadsheets/d/1vSDhMOr7A2iKfzvP9Cv_nSKJkJk0kYCLHLPGdCzqzs0/export?format=csv&gid=1907779796',
   speeding: 'https://docs.google.com/spreadsheets/d/1fPL_eTSRUBIlgrwF0MwjEOeEN6YVfHi9eoCoSaNsy3g/export?format=csv&gid=239312134',
   usage_9647: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=0',
-  usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1510255099',
-  usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1055722390',
+  usage_3500: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=1535938534',
+  usage_9919: 'https://docs.google.com/spreadsheets/d/1rb3Sk7l02wVW2ju4LUz-TC125n2OFjDCFbJoNRFG6rk/export?format=csv&gid=366393931',
   risks: 'https://docs.google.com/spreadsheets/d/1BtC9QZY3mxkiMgc7kyLl6AryVI31IaAwQFfyU2dGrxk/export?format=csv&gid=0',
   alcohol: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTmvjvN6bp3LPDP7Cz8zaZwNgkLThxqwQpj2Zm_6UDnMtEhO8hiTJlhWk-mWdnG7PLYr-s74uvw8qH/pub?output=csv'
 };
